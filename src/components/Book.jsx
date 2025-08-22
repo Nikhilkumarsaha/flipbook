@@ -21,9 +21,9 @@ import { pageAtom } from "./UI";
 
 const easingFactor = 0.5; 
 const easingFactorFold = 0.3; 
-const insideCurveStrength = 0.18; 
-const outsideCurveStrength = 0.05; 
-const turningCurveStrength = 0.09; 
+const insideCurveStrength = 0.08; 
+const outsideCurveStrength = 0.02; 
+const turningCurveStrength = 0.05; 
 
 const PAGE_WIDTH = 1.28;
 const PAGE_HEIGHT = 1.71; 
@@ -156,24 +156,38 @@ const Page = ({ number, page, opened, bookClosed, frontImg, backImg, ...props })
     for (let i = 0; i < bones.length; i++) {
       const target = i === 0 ? group.current : bones[i];
 
+      // Only apply curves during turning animation, not when page is fully opened/closed
+      const isPageFullyOpened = opened && turningTime < 0.1;
+      const isPageFullyClosed = !opened && turningTime < 0.1;
+      
       const insideCurveIntensity = i < 8 ? Math.sin(i * 0.2 + 0.25) : 0;
       const outsideCurveIntensity = i >= 8 ? Math.cos(i * 0.3 + 0.09) : 0;
       const turningIntensity =
         Math.sin(i * Math.PI * (1 / bones.length)) * turningTime;
-      let rotationAngle =
-        insideCurveStrength * insideCurveIntensity * targetRotation -
-        outsideCurveStrength * outsideCurveIntensity * targetRotation +
-        turningCurveStrength * turningIntensity * targetRotation;
-      let foldRotationAngle = degToRad(Math.sign(targetRotation) * 2);
+      
+      let rotationAngle;
       if (bookClosed) {
         if (i === 0) {
           rotationAngle = targetRotation;
-          foldRotationAngle = 0;
         } else {
           rotationAngle = 0;
-          foldRotationAngle = 0;
         }
+      } else if (isPageFullyOpened || isPageFullyClosed) {
+        // Keep pages flat when fully opened or closed
+        rotationAngle = i === 0 ? targetRotation : 0;
+      } else {
+        // Apply curves only during turning animation
+        rotationAngle =
+          insideCurveStrength * insideCurveIntensity * targetRotation -
+          outsideCurveStrength * outsideCurveIntensity * targetRotation +
+          turningCurveStrength * turningIntensity * targetRotation;
       }
+      
+      let foldRotationAngle = degToRad(Math.sign(targetRotation) * 2);
+      if (bookClosed || isPageFullyOpened || isPageFullyClosed) {
+        foldRotationAngle = 0;
+      }
+      
       easing.dampAngle(
         target.rotation,
         "y",
@@ -183,7 +197,7 @@ const Page = ({ number, page, opened, bookClosed, frontImg, backImg, ...props })
       );
 
       const foldIntensity =
-        i > 8
+        i > 8 && !isPageFullyOpened && !isPageFullyClosed
           ? Math.sin(i * Math.PI * (1 / bones.length) - 0.5) * turningTime
           : 0;
       easing.dampAngle(
