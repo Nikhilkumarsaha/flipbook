@@ -9,7 +9,6 @@ import {
   Color,
   Float32BufferAttribute,
   MathUtils,
-  MeshStandardMaterial,
   Skeleton,
   SkinnedMesh,
   SRGBColorSpace,
@@ -68,19 +67,22 @@ pageGeometry.setAttribute(
 );
 
 const whiteColor = new Color("white");
-const emissiveColor = new Color("orange");
+
+// 1x1 white PNG for missing backs (avoids loading errors with undefined)
+const BLANK_IMAGE =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO4Fh1wAAAAASUVORK5CYII=";
 
 const pageMaterials = [
-  new MeshStandardMaterial({
+  new MeshBasicMaterial({
     color: whiteColor,
   }),
-  new MeshStandardMaterial({
+  new MeshBasicMaterial({
     color: "#111",
   }),
-  new MeshStandardMaterial({
+  new MeshBasicMaterial({
     color: whiteColor,
   }),
-  new MeshStandardMaterial({
+  new MeshBasicMaterial({
     color: whiteColor,
   }),
 ];
@@ -89,7 +91,7 @@ const pageMaterials = [
 
 const Page = ({ number, page, opened, bookClosed, frontImg, backImg, ...props }) => {
   // Use useTexture with data URLs
-  const [picture, picture2] = useTexture([frontImg, backImg]);
+  const [picture, picture2] = useTexture([frontImg, backImg || BLANK_IMAGE]);
   picture.colorSpace = picture2.colorSpace = SRGBColorSpace;
   const group = useRef();
   const turnedAt = useRef(0);
@@ -124,9 +126,10 @@ const Page = ({ number, page, opened, bookClosed, frontImg, backImg, ...props })
         map: picture2,
       }),
     ];
-    const mesh = new SkinnedMesh(pageGeometry, materials);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
+  const mesh = new SkinnedMesh(pageGeometry, materials);
+  // Keep the book looking flat/static: no shadows
+  mesh.castShadow = false;
+  mesh.receiveShadow = false;
     mesh.frustumCulled = false;
     mesh.add(skeleton.bones[0]);
     mesh.bind(skeleton);
@@ -256,18 +259,26 @@ export const Book = ({ pdfPages = [], ...props }) => {
     };
   }, [page]);
 
-  // For each page, front is pdfPages[i], back is pdfPages[i+1] or blank
+  // Build physical sheets: each sheet has a front (odd page) and back (even page)
+  const sheets = useMemo(() => {
+    const out = [];
+    for (let i = 0; i < pdfPages.length; i += 2) {
+      out.push({ front: pdfPages[i], back: pdfPages[i + 1] });
+    }
+    return out;
+  }, [pdfPages]);
+
   return (
     <group {...props} rotation-y={-Math.PI / 2}>
-      {pdfPages.map((img, index) => (
+      {sheets.map((sheet, index) => (
         <Page
           key={index}
           page={delayedPage}
           number={index}
           opened={delayedPage > index}
-          bookClosed={delayedPage === 0 || delayedPage === pdfPages.length}
-          frontImg={img}
-          backImg={pdfPages[index + 1] || img} // Use next page or repeat last
+          bookClosed={delayedPage === 0 || delayedPage === sheets.length}
+          frontImg={sheet.front}
+          backImg={sheet.back}
         />
       ))}
     </group>

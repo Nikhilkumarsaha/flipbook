@@ -21,7 +21,7 @@ function App() {
       setLoading(true);
       setPdfPages(null);
       try {
-        const loadingTask = pdfjs.getDocument('/textures/tests.pdf');
+        const loadingTask = pdfjs.getDocument('/textures/tes.pdf');
         const pdf = await loadingTask.promise;
         setNumPages(pdf.numPages);
         const images = [];
@@ -53,12 +53,10 @@ function App() {
           <span className="text-white text-2xl">Loading PDF...</span>
         </div>
       ) : (
-        <Canvas shadows camera={{ position: [-0.5, 1, 4], fov: 45 }}>
-          <group position-y={0}>
-            <Suspense fallback={null}>
-              <Experience pdfPages={pdfPages} />
-            </Suspense>
-          </group>
+        <Canvas shadows={false} camera={{ position: [0, 0, 4], fov: 20 }}>
+          <Suspense fallback={null}>
+            <Experience pdfPages={pdfPages} />
+          </Suspense>
         </Canvas>
       )}
     </>
