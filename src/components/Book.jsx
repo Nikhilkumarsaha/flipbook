@@ -290,7 +290,7 @@ export const Book = ({ pdfPages = [], ...props }) => {
           page={delayedPage}
           number={index}
           opened={delayedPage > index}
-          bookClosed={delayedPage === 0 || delayedPage === sheets.length}
+          bookClosed={delayedPage === 0}
           frontImg={sheet.front}
           backImg={sheet.back}
         />

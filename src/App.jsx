@@ -46,14 +46,14 @@ function App() {
 
   return (
     <>
-      <UI />
+      <UI totalSheets={pdfPages ? Math.ceil(pdfPages.length / 2) : 0} />
       <Loader />
       {loading || !pdfPages ? (
         <div className="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-80">
           <span className="text-white text-2xl">Loading PDF...</span>
         </div>
       ) : (
-        <Canvas shadows={false} camera={{ position: [0, 0, 4], fov: 20 }}>
+        <Canvas shadows={false} camera={{ position: [0, 0, 4], fov: 28 }}>
           <Suspense fallback={null}>
             <Experience pdfPages={pdfPages} />
           </Suspense>
