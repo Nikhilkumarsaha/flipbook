@@ -6,7 +6,11 @@
 #root {
   width: 100vw;
   height: 100vh;
-  background: black;
+  background-image: url('/textures/background.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-color: #000; /* fallback while image loads */
 }
 
 body {

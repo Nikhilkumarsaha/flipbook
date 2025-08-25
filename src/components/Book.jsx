@@ -1,5 +1,5 @@
 import { useCursor, useTexture } from "@react-three/drei";
-import { useFrame } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
 import { useAtom } from "jotai";
 import { easing } from "maath";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -15,6 +15,9 @@ import {
   Uint16BufferAttribute,
   Vector3,
   MeshBasicMaterial,
+  LinearFilter,
+  NearestFilter,
+  ClampToEdgeWrapping,
 } from "three";
 import { degToRad } from "three/src/math/MathUtils.js";
 import { pageAtom } from "./UI";
@@ -93,11 +96,32 @@ const Page = ({ number, page, opened, bookClosed, frontImg, backImg, ...props })
   // Use useTexture with data URLs
   const [picture, picture2] = useTexture([frontImg, backImg || BLANK_IMAGE]);
   picture.colorSpace = picture2.colorSpace = SRGBColorSpace;
+  const { gl } = useThree();
   const group = useRef();
   const turnedAt = useRef(0);
   const lastOpened = useRef(opened);
 
   const skinnedMeshRef = useRef();
+
+  // Improve text clarity by using sharper filtering and disabling mipmaps
+  useEffect(() => {
+    [picture, picture2].forEach((tex) => {
+      if (!tex) return;
+      tex.wrapS = ClampToEdgeWrapping;
+      tex.wrapT = ClampToEdgeWrapping;
+      // NPOT textures typically can't use mipmaps reliably; keep it off for crispness
+      tex.generateMipmaps = false;
+      // Sharper upscaling for small text
+      tex.minFilter = LinearFilter;
+      tex.magFilter = NearestFilter;
+      // Anisotropy is ignored without mipmaps but harmless; keep small value just in case
+      if (gl?.capabilities?.getMaxAnisotropy) {
+        const maxAniso = gl.capabilities.getMaxAnisotropy();
+        tex.anisotropy = Math.min(4, maxAniso || 0);
+      }
+      tex.needsUpdate = true;
+    });
+  }, [picture, picture2, gl]);
 
   const manualSkinnedMesh = useMemo(() => {
     const bones = [];
