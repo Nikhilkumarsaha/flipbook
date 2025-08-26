@@ -81,9 +81,11 @@ function App() {
         </div>
       ) : (
         <Canvas
+          className="w-full h-full"
+          dpr={[1, Math.min(window.devicePixelRatio || 1, 2)]}
           shadows={false}
           camera={{ position: [0, 0, 4], fov: 28 }}
-          gl={{ alpha: true }}
+          gl={{ alpha: true, antialias: true }}
           onCreated={({ gl }) => gl.setClearAlpha(0)}
           style={{ background: 'transparent' }}
         >
