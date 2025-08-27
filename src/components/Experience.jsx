@@ -4,6 +4,7 @@ import { useMemo, useEffect, useState, useRef } from "react";
 import { useAtom } from "jotai";
 import { pageAtom } from "./UI";
 import { pageSideAtom } from "./UI";
+import { zoomAtom } from "./UI";
 import { easing } from "maath";
 
 // Responsive wrapper that scales the book to fit the viewport neatly
@@ -12,6 +13,7 @@ export const Experience = ({ pdfPages }) => {
   // We don't need the actual page value here for layout; keeping atoms consistent for future use
   // const [page] = useAtom(pageAtom);
   const [side] = useAtom(pageSideAtom);
+  const [zoom] = useAtom(zoomAtom);
   const [isMobile, setIsMobile] = useState(
     typeof window !== 'undefined' && window.matchMedia ? window.matchMedia('(max-width: 768px)').matches : false
   );
@@ -32,7 +34,7 @@ export const Experience = ({ pdfPages }) => {
   const BOOK_WIDTH = 1.28; // single page width
   const BOOK_HEIGHT = 1.71; // page height
 
-  const scale = useMemo(() => {
+  const baseScale = useMemo(() => {
     // Leave some breathing room for UI and safe areas
     const marginW = isMobile ? 0.86 : 0.92;
     const marginH = isMobile ? 0.76 : 0.82;
@@ -62,10 +64,15 @@ export const Experience = ({ pdfPages }) => {
     if (!g) return;
     // Smooth horizontal slide
     easing.damp(g.position, 'x', targetX, 0.35, delta);
+  // Smooth zoom: never below baseScale; zoomAtom is >= 1 per UI controls
+  const targetScale = baseScale * Math.max(1, zoom);
+  easing.damp(g.scale, 'x', targetScale, 0.35, delta);
+  easing.damp(g.scale, 'y', targetScale, 0.35, delta);
+  easing.damp(g.scale, 'z', targetScale, 0.35, delta);
   });
 
   return (
-    <group ref={groupRef} scale={scale}>
+  <group ref={groupRef}>
       <Book pdfPages={pdfPages} />
     </group>
   );
