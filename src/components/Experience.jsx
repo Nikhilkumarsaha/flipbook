@@ -47,14 +47,7 @@ export const Experience = ({ pdfPages }) => {
     return isMobile ? clamped * 0.9 : clamped * 1.05;
   }, [viewport.width, viewport.height, isMobile]);
 
-  // Target X offset: on mobile show only one side by shifting horizontally
-  const targetX = useMemo(() => {
-    if (!isMobile) return 0;
-    // Move by half page width so the visible side centers precisely
-    const half = BOOK_WIDTH / 2;
-    // Geometry is translated +W/2, so centering visible face tends to require negative offset for left
-    return side === 'left' ? -half : half;
-  }, [isMobile, side]);
+  // Horizontal offset is applied in world space and must account for current scale (computed per-frame below)
 
   const groupRef = useRef();
 
@@ -62,13 +55,20 @@ export const Experience = ({ pdfPages }) => {
   useFrame((_, delta) => {
     const g = groupRef.current;
     if (!g) return;
-    // Smooth horizontal slide
-    easing.damp(g.position, 'x', targetX, 0.35, delta);
-  // Smooth zoom: never below baseScale; zoomAtom is >= 1 per UI controls
-  const targetScale = baseScale * Math.max(1, zoom);
-  easing.damp(g.scale, 'x', targetScale, 0.35, delta);
-  easing.damp(g.scale, 'y', targetScale, 0.35, delta);
-  easing.damp(g.scale, 'z', targetScale, 0.35, delta);
+    // Smooth zoom: never below baseScale; zoomAtom is >= 1 per UI controls
+    const targetScale = baseScale * Math.max(1, zoom);
+
+    // Compute the horizontal offset in WORLD units so the visible page is centered
+    const half = BOOK_WIDTH / 2; // half page width in local units
+    const targetXWorld = isMobile ? (side === 'left' ? -half : half) * targetScale : 0;
+
+    // Smooth horizontal slide using world-space offset
+    easing.damp(g.position, 'x', targetXWorld, 0.35, delta);
+
+    // Apply smooth scaling
+    easing.damp(g.scale, 'x', targetScale, 0.35, delta);
+    easing.damp(g.scale, 'y', targetScale, 0.35, delta);
+    easing.damp(g.scale, 'z', targetScale, 0.35, delta);
   });
 
   return (
