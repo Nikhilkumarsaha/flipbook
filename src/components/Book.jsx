@@ -92,7 +92,7 @@ const pageMaterials = [
 
 // No more static pages array or preloading
 
-const Page = ({ number, page, opened, bookClosed, frontImg, backImg, ...props }) => {
+const Page = ({ number, page, opened, bookClosed, frontImg, backImg, clickEnabled = true, ...props }) => {
   // Use useTexture with data URLs
   const [picture, picture2] = useTexture([frontImg, backImg || BLANK_IMAGE]);
   picture.colorSpace = picture2.colorSpace = SRGBColorSpace;
@@ -102,17 +102,6 @@ const Page = ({ number, page, opened, bookClosed, frontImg, backImg, ...props })
   const lastOpened = useRef(opened);
 
   const skinnedMeshRef = useRef();
-
-  // Drag state
-  const dragging = useRef(false);
-  const dragT = useRef(0); // 0 (closed) -> 1 (open)
-  const dragStartedOnThis = useRef(false);
-  const dragStartX = useRef(0);
-  const dragMoved = useRef(false);
-  const lastDragTime = useRef(0);
-  const dragStartOpened = useRef(false);
-  const dragStartT = useRef(0);
-  const intendedDirection = useRef(/** 'forward' | 'backward' */ 'forward');
 
   // Improve text clarity by using sharper filtering and disabling mipmaps
   useEffect(() => {
@@ -179,23 +168,11 @@ const Page = ({ number, page, opened, bookClosed, frontImg, backImg, ...props })
       turnedAt.current = +new Date();
       lastOpened.current = opened;
     }
-    let turningTime;
-    if (dragging.current) {
-      // During drag, use direct progress [0..1]
-      turningTime = MathUtils.clamp(dragT.current, 0, 1);
-    } else {
-      // Time-based easing when not dragging (click/arrow)
-      turningTime = Math.min(400, new Date() - turnedAt.current) / 400;
-      turningTime = Math.sin(turningTime * Math.PI);
-    }
+    let turningTime = Math.min(400, new Date() - turnedAt.current) / 400;
+    turningTime = Math.sin(turningTime * Math.PI);
 
-    // Base target rotation for the root bone (i===0)
-    // When dragging, interpolate directly based on dragT
-    let targetRotation = dragging.current
-      ? MathUtils.lerp(Math.PI / 2, -Math.PI / 2, MathUtils.clamp(dragT.current, 0, 1))
-      : opened
-      ? -Math.PI / 2
-      : Math.PI / 2;
+  // Base target rotation for the root bone (i===0) with no drag
+  let targetRotation = opened ? -Math.PI / 2 : Math.PI / 2;
     if (!bookClosed) {
       targetRotation += degToRad(number * 0.8);
     }
@@ -204,9 +181,9 @@ const Page = ({ number, page, opened, bookClosed, frontImg, backImg, ...props })
     for (let i = 0; i < bones.length; i++) {
       const target = i === 0 ? group.current : bones[i];
 
-      // Only apply curves during turning animation, not when page is fully opened/closed
-      const isPageFullyOpened = !dragging.current && opened && turningTime < 0.1;
-      const isPageFullyClosed = !dragging.current && !opened && turningTime < 0.1;
+  // Only apply curves during turning animation, not when page is fully opened/closed
+  const isPageFullyOpened = opened && turningTime < 0.1;
+  const isPageFullyClosed = !opened && turningTime < 0.1;
       
       const insideCurveIntensity = i < 8 ? Math.sin(i * 0.2 + 0.25) : 0;
       const outsideCurveIntensity = i >= 8 ? Math.cos(i * 0.3 + 0.09) : 0;
@@ -232,7 +209,7 @@ const Page = ({ number, page, opened, bookClosed, frontImg, backImg, ...props })
       }
       
       let foldRotationAngle = degToRad(Math.sign(targetRotation) * 2);
-      if (bookClosed || isPageFullyOpened || isPageFullyClosed) {
+  if (bookClosed || isPageFullyOpened || isPageFullyClosed) {
         foldRotationAngle = 0;
       }
       
@@ -260,106 +237,25 @@ const Page = ({ number, page, opened, bookClosed, frontImg, backImg, ...props })
 
   const [currentPage, setPage] = useAtom(pageAtom);
   const [highlighted, setHighlighted] = useState(false);
-  useCursor(highlighted);
-
-  // Helpers to compute drag progress from pointer position in local space
-  const computeLocalX = (e) => {
-    const pt = e.point.clone();
-    group.current?.worldToLocal(pt);
-    return pt.x; // page geometry spans x in [0..PAGE_WIDTH]
-  };
-
-  const startDrag = (e) => {
-    e.stopPropagation();
-    // Allow drag only on the active top pages to avoid odd depth picks
-  const canDragForward = !opened && number === currentPage; // next page to open
-  const canDragBackward = opened && number === currentPage - 1; // last opened page to close
-    if (!canDragForward && !canDragBackward) return;
-  dragStartOpened.current = opened;
-  intendedDirection.current = opened ? 'backward' : 'forward';
-    // Initialize t from current pointer x
-    const localX = computeLocalX(e);
-  const t = MathUtils.clamp(localX / PAGE_WIDTH, 0, 1);
-  // Map pointer X to progress: both modes use (1 - t) so moving right closes (t->1, progress->0)
-  dragT.current = 1 - t;
-  dragStartT.current = dragT.current;
-    dragging.current = true;
-    dragStartedOnThis.current = true;
-  dragStartX.current = localX;
-  dragMoved.current = false;
-    setHighlighted(true);
-    // Try to capture pointer so moves are delivered even if leaving the mesh
-    try {
-      e.target.setPointerCapture?.(e.pointerId);
-    } catch {}
-  };
-
-  const onDragMove = (e) => {
-    if (!dragging.current || !dragStartedOnThis.current) return;
-    e.stopPropagation();
-    const localX = computeLocalX(e);
-  const t = MathUtils.clamp(localX / PAGE_WIDTH, 0, 1);
-  dragT.current = 1 - t;
-    if (Math.abs(localX - dragStartX.current) > 0.01) {
-      dragMoved.current = true;
-    }
-  };
-
-  const endDrag = (e) => {
-    if (!dragging.current || !dragStartedOnThis.current) return;
-    e.stopPropagation();
-    // Always commit on release; decide by progress delta with tiny-move fallback
-    const diffT = dragT.current - dragStartT.current;
-    const EPS = 0.01;
-    if (Math.abs(diffT) <= EPS) {
-      // Minimal movement: commit intended direction from where drag started
-      if (intendedDirection.current === 'forward') {
-        setPage(number + 1);
-      } else {
-        setPage(number);
-      }
-    } else if (diffT > 0) {
-      // Progress increased => opening
-      setPage(number + 1);
-    } else {
-      // Progress decreased => closing
-      setPage(number);
-    }
-    dragging.current = false;
-    dragStartedOnThis.current = false;
-    // Suppress following click event
-    lastDragTime.current = Date.now();
-    setHighlighted(false);
-    try {
-      e.target.releasePointerCapture?.(e.pointerId);
-    } catch {}
-  };
+  // Only show pointer when click to turn is enabled
+  useCursor(highlighted && clickEnabled, clickEnabled ? 'pointer' : 'auto');
 
   return (
     <group
       {...props}
       ref={group}
       onPointerEnter={(e) => {
-        e.stopPropagation();
-        setHighlighted(true);
+        if (clickEnabled) e.stopPropagation();
+        if (clickEnabled) setHighlighted(true);
       }}
       onPointerLeave={(e) => {
-        e.stopPropagation();
-        setHighlighted(false);
+        if (clickEnabled) e.stopPropagation();
+        if (clickEnabled) setHighlighted(false);
       }}
-      onPointerDown={startDrag}
-      onPointerMove={onDragMove}
-      onPointerUp={endDrag}
-      onPointerCancel={endDrag}
       onClick={(e) => {
+        if (!clickEnabled) return; // allow panning/group handlers to work
         e.stopPropagation();
-        // If a drag just occurred, ignore click
-        if (
-          dragging.current ||
-          dragStartedOnThis.current ||
-          Date.now() - lastDragTime.current < 200
-        )
-          return;
+        // Click to toggle page (when enabled)
         setPage(opened ? number : number + 1);
         setHighlighted(false);
       }}
@@ -373,7 +269,7 @@ const Page = ({ number, page, opened, bookClosed, frontImg, backImg, ...props })
   );
 };
 
-export const Book = ({ pdfPages = [], ...props }) => {
+export const Book = ({ pdfPages = [], clickEnabled = true, ...props }) => {
   const [page] = useAtom(pageAtom);
   const [delayedPage, setDelayedPage] = useState(page);
 
@@ -425,6 +321,7 @@ export const Book = ({ pdfPages = [], ...props }) => {
           bookClosed={delayedPage === 0}
           frontImg={sheet.front}
           backImg={sheet.back}
+          clickEnabled={clickEnabled}
         />
       ))}
     </group>
