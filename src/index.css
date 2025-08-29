@@ -24,6 +24,11 @@ body {
   overflow: hidden; /* Avoid scroll jank when dragging pages on mobile */
 }
 
+/* Prevent native touch gestures from hijacking canvas drags */
+canvas {
+  touch-action: none;
+}
+
 .outline-text {
   -webkit-text-stroke: 1px white;
 }

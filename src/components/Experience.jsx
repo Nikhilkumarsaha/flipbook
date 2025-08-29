@@ -9,7 +9,7 @@ import { easing } from "maath";
 
 // Responsive wrapper that scales the book to fit the viewport neatly
 export const Experience = ({ pdfPages }) => {
-  const { viewport, size } = useThree();
+  const { viewport, size, gl } = useThree();
   // We don't need the actual page value here for layout; keeping atoms consistent for future use
   // const [page] = useAtom(pageAtom);
   const [side] = useAtom(pageSideAtom);
@@ -116,25 +116,33 @@ export const Experience = ({ pdfPages }) => {
   const onPointerDown = (e) => {
     if (clickEnabled) return;
     e.stopPropagation();
+    // Avoid browser gestures on mobile while dragging
+    if (e.preventDefault) try { e.preventDefault(); } catch {}
     draggingRef.current = true;
     dragStartRef.current.x = e.clientX;
     dragStartRef.current.y = e.clientY;
     panStartRef.current.x = panRef.current.x;
     panStartRef.current.y = panRef.current.y;
-    if (e.target.setPointerCapture) {
-      try { e.target.setPointerCapture(e.pointerId); } catch {}
+    // Prefer capturing on the canvas element rather than the 3D object
+    const canvas = gl?.domElement;
+    if (canvas && canvas.setPointerCapture) {
+      try { canvas.setPointerCapture(e.pointerId); } catch {}
     }
   };
 
   const onPointerMove = (e) => {
     if (!draggingRef.current || clickEnabled) return;
-    // convert pixel delta to world units
+    // Convert CSS pixel delta to world units (account for DPR)
     const dxPx = e.clientX - dragStartRef.current.x;
     const dyPx = e.clientY - dragStartRef.current.y;
-    const wppx = viewport.width / size.width;
-    const wppy = viewport.height / size.height;
-    const dx = dxPx * wppx;
-    const dy = -dyPx * wppy; // invert so dragging up moves content up
+    const dpr = typeof gl?.getPixelRatio === 'function' ? gl.getPixelRatio() : (window.devicePixelRatio || 1);
+    const cssW = size.width / dpr;
+    const cssH = size.height / dpr;
+    const wppx = viewport.width / cssW;   // world units per CSS pixel (x)
+    const wppy = viewport.height / cssH;  // world units per CSS pixel (y)
+  const currentScale = (baseScale * Math.max(1, zoom)) || 1;
+  const dx = (dxPx * wppx) / currentScale;
+  const dy = (-dyPx * wppy) / currentScale; // invert so dragging up moves content up
     panRef.current.x = panStartRef.current.x + dx;
     panRef.current.y = panStartRef.current.y + dy;
   };
@@ -148,11 +156,51 @@ export const Experience = ({ pdfPages }) => {
     const up = () => endDrag();
     window.addEventListener('pointerup', up);
     window.addEventListener('pointercancel', up);
+    // Also listen on the canvas for move events so panning stays responsive
+    const canvas = gl?.domElement;
+    const canvasDown = (ev) => {
+      if (clickEnabled) return;
+      if (ev.cancelable) ev.preventDefault();
+      draggingRef.current = true;
+      dragStartRef.current.x = ev.clientX;
+      dragStartRef.current.y = ev.clientY;
+      panStartRef.current.x = panRef.current.x;
+      panStartRef.current.y = panRef.current.y;
+      if (canvas && canvas.setPointerCapture) {
+        try { canvas.setPointerCapture(ev.pointerId); } catch {}
+      }
+    };
+    const canvasMove = (ev) => {
+      if (!draggingRef.current || clickEnabled) return;
+      // Prevent native scrolling while dragging on touch devices
+      if (ev.cancelable) ev.preventDefault();
+      // Reuse the same conversion logic as onPointerMove
+      const dxPx = ev.clientX - dragStartRef.current.x;
+      const dyPx = ev.clientY - dragStartRef.current.y;
+      const dpr = typeof gl?.getPixelRatio === 'function' ? gl.getPixelRatio() : (window.devicePixelRatio || 1);
+      const cssW = size.width / dpr;
+      const cssH = size.height / dpr;
+      const wppx = viewport.width / cssW;
+      const wppy = viewport.height / cssH;
+      const currentScale = (baseScale * Math.max(1, zoom)) || 1;
+      const dx = (dxPx * wppx) / currentScale;
+      const dy = (-dyPx * wppy) / currentScale;
+      panRef.current.x = panStartRef.current.x + dx;
+      panRef.current.y = panStartRef.current.y + dy;
+    };
+    if (canvas) {
+      canvas.addEventListener('pointerdown', canvasDown, { passive: false });
+      canvas.addEventListener('pointermove', canvasMove, { passive: false });
+    }
     return () => {
       window.removeEventListener('pointerup', up);
       window.removeEventListener('pointercancel', up);
+      if (canvas) {
+        canvas.removeEventListener('pointerdown', canvasDown);
+        canvas.removeEventListener('pointermove', canvasMove);
+      }
     };
-  }, []);
+  }, [gl, viewport.width, viewport.height, size.width, size.height, clickEnabled]);
 
   return (
     <group ref={groupRef} onPointerDown={onPointerDown} onPointerMove={onPointerMove}>
