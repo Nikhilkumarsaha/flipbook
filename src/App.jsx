@@ -1,8 +1,10 @@
 import { Loader } from "@react-three/drei";
 import { Canvas } from "@react-three/fiber";
 import { Suspense, useEffect, useState } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { Experience } from "./components/Experience";
 import { UI } from "./components/UI";
+import { Shimmer } from "./components/Shimmer";
 import { pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
@@ -10,11 +12,27 @@ import 'react-pdf/dist/Page/TextLayer.css';
 // Set up PDF.js worker for react-pdf
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
 
+const wittyLines = [
+  "Preparing chaos, friendships, and plot twists...",
+  "Have some patience, rushil....",
+  "Rushil is entering main-character mode...",
+];
+
 function App() {
   const [numPages, setNumPages] = useState(null);
   const [pdfPages, setPdfPages] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [messageIndex, setMessageIndex] = useState(0);
+
+  // Cycle witty messages
+  useEffect(() => {
+    if (!loading) return;
+    const interval = setInterval(() => {
+      setMessageIndex(prev => (prev + 1) % wittyLines.length);
+    }, 2200);
+    return () => clearInterval(interval);
+  }, [loading]);
 
   // Load PDF and render each page to a canvas, then extract as image
   useEffect(() => {
@@ -31,6 +49,7 @@ function App() {
         const loadingTask = pdfjs.getDocument({ url: pdfUrl, withCredentials: false });
         const pdf = await loadingTask.promise;
         setNumPages(pdf.numPages);
+        
         const images = [];
         for (let i = 1; i <= pdf.numPages; i++) {
           const page = await pdf.getPage(i);
@@ -49,6 +68,7 @@ function App() {
           const loadingTask = pdfjs.getDocument('/textures/test.pdf');
           const pdf = await loadingTask.promise;
           setNumPages(pdf.numPages);
+          
           const images = [];
           for (let i = 1; i <= pdf.numPages; i++) {
             const page = await pdf.getPage(i);
@@ -75,9 +95,30 @@ function App() {
     <>
       <UI totalSheets={pdfPages ? Math.ceil(pdfPages.length / 2) : 0} />
       <Loader />
-    {loading || !pdfPages ? (
-        <div className="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-80">
-      <span className="text-white text-2xl">{error ? error : 'Loading PDF...'}</span>
+      {loading || !pdfPages ? (
+        <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/90 select-none">
+          {error ? (
+            <p className="text-red-400 text-lg font-light px-6 text-center">{error}</p>
+          ) : (
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={messageIndex}
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ duration: 0.3 }}
+              >
+                <Shimmer
+                  as="p"
+                  duration={2}
+                  spread={2}
+                  className="text-xl font-medium px-6 text-center"
+                >
+                  {wittyLines[messageIndex]}
+                </Shimmer>
+              </motion.div>
+            </AnimatePresence>
+          )}
         </div>
       ) : (
         <Canvas
@@ -99,3 +140,4 @@ function App() {
 }
 
 export default App;
+
