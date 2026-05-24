@@ -16,6 +16,10 @@ const wittyLines = [
   "Preparing chaos, friendships, and plot twists...",
   "Have some patience, rushil....",
   "Rushil is entering main-character mode...",
+  "Rendering memories from Ramgarh to Pocket FM...",
+  "Loading dreams, detours, and deadlines...",
+  "Loading friendships that survived adulthood...",
+  "Building the comic multiverse...",
 ];
 
 function App() {
